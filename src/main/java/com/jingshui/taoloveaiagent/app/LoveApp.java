@@ -3,6 +3,8 @@ package com.jingshui.taoloveaiagent.app;
 import com.jingshui.taoloveaiagent.Chatmemory.FileBasedChatMemory;
 import com.jingshui.taoloveaiagent.advisor.MyLoggerAdvisor;
 import com.jingshui.taoloveaiagent.advisor.ReReadingAdvisor;
+import com.jingshui.taoloveaiagent.rag.LoveAppRagCustomAdvisorFactory;
+import com.jingshui.taoloveaiagent.rag.QueryRewriter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -126,10 +128,15 @@ public class LoveApp {
     @Resource
     private VectorStore pgVectorVectorStore;
 
+    @Resource
+    private QueryRewriter queryRewriter;
+
     public String doChatWithRag(String message, String chatId) {
+
+        String queryRewriteMessage = queryRewriter.doQueryRewrite(message);
         ChatResponse chatResponse = chatClient
                 .prompt()
-                .user(message)
+                .user(queryRewriteMessage)
                 .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
                 // 开启日志，便于观察效果
@@ -139,7 +146,9 @@ public class LoveApp {
                 // 应用 RAG 检索增强服务（基于云知识库服务）
 //                .advisors(loveAppRagCloudAdvisor)
                 // 应用 RAG 检索增强服务（基于 PgVector 向量存储）
-                .advisors(new QuestionAnswerAdvisor(pgVectorVectorStore))
+ //               .advisors(new QuestionAnswerAdvisor(pgVectorVectorStore))
+                // 应用自定义的 RAG 检索增强服务（文档查询器 + 上下文增强器）
+                .advisors(LoveAppRagCustomAdvisorFactory.createLoveAppRagCustomAdvisor(loveAppVectorStore,"单身"))
                 .call()
                 .chatResponse();
         String content = chatResponse.getResult().getOutput().getText();
